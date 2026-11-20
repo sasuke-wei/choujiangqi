@@ -3,7 +3,14 @@ import { qrPath } from "./qr.js";
 const params=new URLSearchParams(location.search), id=params.get("event"), mode=params.get("view")||"host";
 const app=document.querySelector("#app"), dialog=document.querySelector("#dialog");
 function saved(){try{return JSON.parse(localStorage.getItem("press-events")||"{}");}catch{return {};}}
-const key=id&&saved()[id]?.key;
+const demoStorage="press-demo";
+function demoKey(){
+  try {
+    const demo=JSON.parse(sessionStorage.getItem(demoStorage));
+    return demo?.id===id?demo.key:undefined;
+  } catch { return undefined; }
+}
+const key=id&&(saved()[id]?.key||demoKey());
 const campus='<svg class="campus" viewBox="0 0 620 242" aria-hidden="true" focusable="false"><use href="#south-lake"/></svg>';
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const link=(view,event=id)=>"/lottery.html?"+new URLSearchParams({event,view});
@@ -39,7 +46,7 @@ function agenda(rounds,current,edit){
   return `<section class="agenda"><div class="section-head"><h2>奖项安排</h2><small>${rounds.length} 轮</small></div>${rounds.map((r,i)=>`<div class="round ${i===current?"on":""}"><span class="roundtag" aria-label="第 ${i+1} 轮">${num(i+1)}</span><div><strong>${esc(r.prize)}</strong><small>${i<current?"已开奖":i===current?"下一轮":"待开奖"}</small></div><div class="right">${r.quota} 人 ${edit&&i>=current?button("edit","调整","navlink",`data-i="${i}" aria-label="调整第 ${i+1} 轮"`):""}</div></div>`).join("")}</section>`;
 }
 function home(){
-  app.innerHTML=`<section class="start"><h1>现场抽奖</h1>${button("setup","配置新活动","primary")}</section>`;
+  app.innerHTML=`<section class="start"><h1>现场抽奖</h1><div class="start-actions">${button("setup","配置新活动","primary")}${button("demo","体验演示","demo-entry")}</div></section>`;
 }
 function modal(title,content,fn,label="确认"){
   activeForm=fn;document.querySelector("#dialogBody").innerHTML=`<form id="modalForm" class="form stack"><h2 id="dialogTitle">${esc(title)}</h2>${content}<p class="error" role="alert"></p><div class="actions"><button class="primary" type="submit">${esc(label)}</button>${button("cancel","取消")}</div></form>`;
@@ -48,6 +55,11 @@ function modal(title,content,fn,label="确认"){
 async function create(title,rounds){
   const result=await api({action:"create",title,rounds});
   localStorage.setItem("press-events",JSON.stringify({...saved(),[result.id]:{title,key:result.key}}));
+  location.assign(link("host",result.id));
+}
+async function openDemo(){
+  const result=await api({action:"create-demo"});
+  sessionStorage.setItem(demoStorage,JSON.stringify(result));
   location.assign(link("host",result.id));
 }
 function fields(number){
@@ -167,6 +179,7 @@ function runRevealClock(reveal) {
   tick();
 }
 function stage(){
+  const isDemo=state.kind==="demo";
   const round=state.rounds[state.current-1];
   const next=state.rounds[state.current];
   const actions=canOperate?roundAction():"";
@@ -183,8 +196,9 @@ function stage(){
     board=hero(`即将开奖  /  ${edition(1)}`,next.prize,`本轮抽取 ${next.quota} 人`,actions);
   }
   const tools=state.reveal?"":setupAndHistory();
-  app.innerHTML=`<div class="heading"><div><h1>${esc(state.title)}</h1><p class="event-meta">已报名 <b id="attendance">${state.count}</b> 人 · ${state.closed?"活动已结束":next?"报名进行中":"报名已截止"}</p></div>${fullscreen}</div>
-    <div class="stagegrid"><div class="broadcast">${board}</div>${qrBox()}</div>${tools}`;
+  const attendance=isDemo?`<b id="attendance">${state.count}</b> 位虚构参与者`:`已报名 <b id="attendance">${state.count}</b> 人 · ${state.closed?"活动已结束":next?"报名进行中":"报名已截止"}`;
+  app.innerHTML=`<div class="heading"><div><h1>${esc(state.title)}</h1><p class="event-meta">${attendance}</p></div>${isDemo?`<div class="actions demo-controls">${fullscreen}<a class="button" href="${listUrl}">退出演示</a></div>`:fullscreen}</div>
+    <div class="stagegrid${isDemo?" demo-stage":""}"><div class="broadcast">${board}</div>${isDemo?"":qrBox()}</div>${tools}`;
   if(state.reveal)runRevealClock(state.reveal);
 }
 function renderActivity(){
@@ -194,6 +208,10 @@ function renderActivity(){
 }
 const signupFields = `<label>姓名<input name="name" required maxlength="40" autocomplete="name" placeholder="请输入完整姓名"></label><label>学号<input name="student" required minlength="4" maxlength="32" spellcheck="false" placeholder="请输入学号，保留开头的 0"></label><p class="helper">同一学号限报一次。开奖时大屏会滚动显示姓名，中奖后显示姓名和学号后四位。</p>`;
 function join(){
+  if(state.kind==="demo"){
+    app.innerHTML=`<div class="entry">${hero("抽奖演示",state.title,"演示活动无需报名。")}</div>`;
+    return;
+  }
   const stopped=state.current===state.rounds.length;
   app.innerHTML=`<div class="entry">${hero("活动报名",state.title,stopped?"本场报名已结束":`现在报名可参加第 ${state.current+1} 轮及后续抽奖`)}<form id="joinForm" class="form panel below stack"><h2>${stopped?"报名已截止":"填写报名信息"}</h2>${stopped?"":`${signupFields}<button class="primary" type="submit">确认报名</button>`}<p class="error" role="alert"></p></form></div>`;
 }
@@ -230,6 +248,11 @@ document.addEventListener("click",async e=>{
   const action=el.dataset.action;
   try{
     if(action==="setup")setup();
+    else if(action==="demo"){
+      busy=true;
+      el.disabled=true;
+      await openDemo();
+    }
     else if(action==="cancel")dialog.close();
     else if(action==="add"){
       const area=document.querySelector("#fields");

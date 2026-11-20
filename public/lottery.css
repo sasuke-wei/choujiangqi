@@ -59,7 +59,9 @@ main { padding-bottom: 64px; }
   text-align: center;
 }
 .start h1 { font-size: clamp(2.5rem, 6vw, 4.5rem); }
-.start button { min-width: 156px; min-height: 48px; font-size: 1rem; }
+.start-actions { display: grid; justify-items: center; gap: 5px; }
+.start .primary { min-width: 156px; min-height: 48px; font-size: 1rem; }
+.demo-entry { border: 0; padding-block: 4px; color: var(--green); font-size: .875rem; font-weight: 500; text-decoration: underline; text-underline-offset: 4px; }
 .poster {
   display: grid;
   grid-template-columns: minmax(0, .87fr) minmax(0, 1.13fr);
@@ -94,6 +96,8 @@ main { padding-bottom: 64px; }
 .event-meta { margin-top: 8px; font-size: .95rem; }
 .event-meta b { color: var(--green); font-variant-numeric: tabular-nums; }
 .stagegrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 22%); gap: clamp(30px, 4.7vw, 84px); align-items: start; padding-block: clamp(25px, 3.1vw, 44px); }
+.demo-stage { grid-template-columns: minmax(0, 1fr); }
+.demo-controls { flex: none; justify-content: flex-end; }
 .broadcast { min-width: 0; }
 .broadcast .poster { min-height: 305px; padding-block: 24px; border: 0; grid-template-columns: minmax(0, 1fr) minmax(0, .85fr); }
 .broadcast .poster h2 { font-size: clamp(2.2rem, 4vw, 4.25rem); }
@@ -196,6 +200,8 @@ dialog h2 { font-size: 1.6rem; border-bottom: 1px solid var(--green); padding-bo
   .stagegrid { grid-template-columns: 1fr; padding-block: 20px; gap: 24px; }
   .heading { align-items: start; padding-block: 22px; }
   .heading button { padding-inline: 10px; }
+  .demo-controls { max-width: 42%; gap: 6px; }
+  .demo-controls .button { padding-inline: 10px; }
   .qrbox { border: 0; border-top: 1px solid var(--line); padding: 17px 0 0; }
   .qr { width: min(200px, 100%); }
   .summary { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 14px; }

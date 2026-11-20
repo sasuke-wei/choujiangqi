@@ -97,3 +97,21 @@ test("名额不足可调整、迟到者不能补抽、候选耗尽留空、活�
   const other=await event([1]);
   assert.equal((await join(other.id,"0001")).data.duplicate,false);
 });
+
+test("演示预置 30 人、独立于正式活动并使用正式开奖流程",async()=>{
+  const created = await request("", {action:"create-demo"});
+  assert.equal(created.status,200);
+  const {id,key} = created.data;
+  const initial = (await request(id)).data;
+  assert.equal(initial.kind,"demo");
+  assert.equal(initial.count,30);
+  assert.deepEqual(initial.rounds.map(round=>round.quota),[3,2,2,1]);
+  assert.equal((await join(id,"A9001")).status,409);
+  assert.equal((await request(id,{action:"draw",revision:0},key)).status,200);
+  assert.equal((await request(id,null,key)).data.reveal.names.length,30);
+  assert.equal((await request(id)).data.reveal.names,undefined);
+
+  const formal = await event([1]);
+  assert.equal((await request(formal.id)).data.count,0);
+  assert.equal((await join(formal.id,"A9001")).status,200);
+});
