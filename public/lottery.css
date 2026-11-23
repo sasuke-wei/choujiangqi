@@ -50,11 +50,13 @@ button:disabled { opacity: .5; cursor: wait; }
 .school { padding-left: 18px; border-left: 1px solid var(--line); color: var(--muted); font-size: .94rem; letter-spacing: .09em; }
 #context { margin-left: auto; color: var(--muted); font-size: .875rem; }
 main { padding-bottom: 64px; }
-.home-page main { width: min(1440px, 100%); padding: clamp(0px, 2.6vw, 40px); }
+.home-page { min-height: 100dvh; }
+.home-page main { width: 100%; padding: 0; }
 .start {
   position: relative;
   isolation: isolate;
-  min-height: clamp(490px, 82svh, 860px);
+  min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   align-content: center;
   justify-items: start;
@@ -70,9 +72,7 @@ main { padding-bottom: 64px; }
 .start .demo-entry { background: transparent; color: white; }
 .start :focus-visible { outline-color: white; }
 @media (max-width: 620px) {
-  .home-page main { padding: 0; }
   .start {
-    min-height: 100svh;
     align-content: end;
     justify-items: center;
     padding: 30px 15px max(54px, 12svh);
