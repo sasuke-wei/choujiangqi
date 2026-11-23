@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#ffffff">
   <title>抽奖台</title>
   <link rel="icon" href="/mark.svg?v=2" type="image/svg+xml">
-  <link rel="stylesheet" href="/lottery.css?v=8">
+  <link rel="stylesheet" href="/lottery.css?v=9">
 </head>
 <body>
   <svg xmlns="http://www.w3.org/2000/svg" class="symbols" aria-hidden="true" focusable="false">
@@ -79,6 +79,15 @@
   </div></header>
   <main id="app"><p>正在打开抽奖台…</p></main>
   <dialog id="dialog" aria-labelledby="dialogTitle"><div id="dialogBody"></div></dialog>
+  <dialog id="qrDialog" class="qr-screen" aria-labelledby="qrTitle">
+    <div class="qr-stage">
+      <header class="qr-stage-header">
+        <h2 id="qrTitle">扫码报名</h2>
+        <button type="button" id="qrReturn" autofocus>关闭大图</button>
+      </header>
+      <div id="qrLarge" class="qr-large"></div>
+    </div>
+  </dialog>
   <dialog id="awardDialog" class="award-screen" aria-labelledby="awardTitle" aria-describedby="awardRound">
     <div class="award-stage">
       <header class="award-brand">
@@ -98,6 +107,6 @@
     </div>
   </dialog>
   <div id="notice" role="status" aria-live="polite" hidden></div>
-  <script type="module" src="/lottery.js?v=10"></script>
+  <script type="module" src="/lottery.js?v=11"></script>
 </body>
 </html>

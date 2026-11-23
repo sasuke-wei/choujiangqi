@@ -3,6 +3,7 @@ import { qrPath } from "./qr.js";
 const params=new URLSearchParams(location.search), id=params.get("event"), mode=params.get("view")||"host";
 const app=document.querySelector("#app"), dialog=document.querySelector("#dialog");
 const awardDialog=document.querySelector("#awardDialog");
+const qrDialog=document.querySelector("#qrDialog");
 function saved(){try{return JSON.parse(localStorage.getItem("press-events")||"{}");}catch{return {};}}
 const demoStorage="press-demo";
 function demoKey(){
@@ -79,7 +80,12 @@ function home(){
   app.innerHTML=`<section class="start"><h1>现场抽奖</h1><div class="start-actions">${button("setup","配置新活动","primary")}${button("demo","体验演示","demo-entry")}</div></section>`;
 }
 function modal(title,content,fn,label="确认"){
-  activeForm=fn;document.querySelector("#dialogBody").innerHTML=`<form id="modalForm" class="form stack"><h2 id="dialogTitle">${esc(title)}</h2>${content}<p class="error" role="alert"></p><div class="actions"><button class="primary" type="submit">${esc(label)}</button>${button("cancel","取消")}</div></form>`;
+  activeForm=fn;document.querySelector("#dialogBody").innerHTML=`<form id="modalForm" class="form stack">
+    <h2 id="dialogTitle">${esc(title)}</h2>
+    <div class="modal-fields stack">${content}</div>
+    <footer class="modal-footer stack"><p class="error" role="alert"></p>
+      <div class="actions"><button class="primary" type="submit">${esc(label)}</button>${button("cancel","取消")}</div>
+    </footer></form>`;
   dialog.showModal();
 }
 async function create(title,rounds){
@@ -113,20 +119,23 @@ function results(r,control=false,showAbsent=control){
 }
 let qrMarkup;
 function qrBox(){
-  if(state.current===state.rounds.length)return `<div class="qrbox"><h2>报名已截止</h2></div>`;
+  if(state.current===state.rounds.length){
+    if(qrDialog.open)qrDialog.close();
+    return `<div class="qrbox"><h2>报名已截止</h2></div>`;
+  }
   if(!qrMarkup){
     const joinPath=link("join");
     const {size,path}=qrPath(new URL(joinPath,location.href).href);
     qrMarkup=`<a class="qr" href="${esc(joinPath)}" target="_blank" rel="noopener" aria-label="打开本场报名页"><svg role="img" aria-label="本场报名二维码" viewBox="0 0 ${size} ${size}" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="white"/><path d="${path}" fill="currentColor"/></svg></a>`;
   }
-  return `<div class="qrbox"><h2>扫码报名</h2>${qrMarkup}</div>`;
+  return `<div class="qrbox"><div class="qr-heading"><h2>扫码报名</h2>${button("zoom-qr","放大二维码","qr-zoom",'aria-haspopup="dialog" aria-controls="qrDialog"')}</div>${qrMarkup}</div>`;
 }
 function roundAction(){
   const next=state.rounds[state.current];
   if(next)return button("draw",`抽取第 ${state.current+1} 轮 · ${esc(next.prize)} · ${next.quota} 人`,"light");
   return state.closed?"":button("close","结束本场活动","light");
 }
-let revealTimer;
+let revealTimer, revealSettling=false;
 function edition(round) {
   const total = state.rounds.length;
   return `第 ${round} 轮 / 共 ${total} 轮`;
@@ -208,6 +217,28 @@ function runRevealClock(reveal) {
   }
   tick();
 }
+async function settleReveal(previous, next) {
+  const track=app.querySelector(".name-track");
+  if(!track)return;
+  const winners=next.rounds[next.current-1].wins.filter(winner=>!winner.absent);
+  const finalNames=previous.reveal.kind==="replace"?winners.slice(-1):winners;
+  if(!finalNames.length)return;
+
+  clearTimeout(revealTimer);
+  for(const animation of track.getAnimations?.()??[])animation.cancel();
+  const featured=track.querySelector(".featured");
+  track.parentElement.classList.add("is-settled");
+  track.style.setProperty("--lanes",String(Math.min(4,finalNames.length)));
+  featured.replaceChildren(...finalNames.map(({name})=>{
+    const cell=document.createElement("span");
+    cell.textContent=name;
+    return cell;
+  }));
+  app.querySelector(".reel-status").textContent=previous.reveal.kind==="replace"?"补抽结果":"本轮中奖名单";
+  revealSettling=true;
+  try{await new Promise(resolve=>setTimeout(resolve,1100));}
+  finally{revealSettling=false;}
+}
 function stage(){
   const isDemo=state.kind==="demo";
   const round=state.rounds[state.current-1];
@@ -240,6 +271,7 @@ function showAwardScreen(previous, next) {
   if (!newResult) return;
   const winners = round.wins.filter(winner => !winner.absent);
   if (!winners.length) return;
+  if (qrDialog.open) qrDialog.close();
   awardDialog.querySelector("#awardRound").textContent = `第 ${next.current} 轮 · ${round.prize}`;
   const list = awardDialog.querySelector("#awardWinners");
   list.innerHTML = winners.map(winner =>
@@ -288,7 +320,7 @@ async function refreshParticipantResult() {
     participantPending = false;
   }
 }
-const signupFields = `<label>姓名<input name="name" required maxlength="40" autocomplete="name" placeholder="请输入完整姓名"></label><label>学号<input name="student" required minlength="4" maxlength="32" spellcheck="false" placeholder="请输入学号，保留开头的 0"></label><p class="helper">同一学号限报一次。开奖时大屏会滚动显示姓名，中奖后显示姓名和学号后四位。</p>`;
+const signupFields = `<label>姓名<input name="name" required maxlength="40" autocomplete="name" placeholder="请输入完整姓名"></label><label>学号<input name="student" required minlength="4" maxlength="32" spellcheck="false" placeholder="请输入学号"></label><p class="helper">同一学号限报一次。开奖时大屏会滚动显示姓名，中奖后显示姓名和学号后四位。</p>`;
 function join(){
   if(state.kind==="demo"){
     app.innerHTML=`<div class="entry">${hero("抽奖演示",state.title,"演示活动无需报名。")}</div>`;
@@ -298,10 +330,12 @@ function join(){
   app.innerHTML=`<div class="entry">${hero("活动报名",state.title,stopped?"本场报名已结束":`现在报名可参加第 ${state.current+1} 轮及后续抽奖`)}<form id="joinForm" class="form panel below stack"><h2>${stopped?"报名已截止":"填写报名信息"}</h2>${stopped?"":`${signupFields}<button class="primary" type="submit">确认报名</button>`}<p class="error" role="alert"></p></form><section id="participantResult" class="entry-result below stack" role="status" hidden></section></div>`;
 }
 async function refresh(force=false){
+  if(revealSettling)return;
   const n=++sequence;
   try{
     const next=await api();if(n!==sequence)return;
     const previous=state;
+    if(previous?.reveal&&!next.reveal&&next.revision===previous.revision)await settleReveal(previous,next);
     const changed=force||!previous||next.revision!==previous.revision||Boolean(next.reveal)!==Boolean(previous.reveal);
     const attendance=document.querySelector("#attendance");
     if(attendance)attendance.textContent=String(next.count);
@@ -339,6 +373,10 @@ document.addEventListener("click",async e=>{
       await openDemo();
     }
     else if(action==="cancel")dialog.close();
+    else if(action==="zoom-qr"){
+      qrDialog.querySelector("#qrLarge").replaceChildren(el.closest(".qrbox").querySelector(".qr svg").cloneNode(true));
+      qrDialog.showModal();
+    }
     else if(action==="add"){
       const area=document.querySelector("#fields");
       if(area.children.length>=20)return toast("最多可设置 20 轮。");
@@ -362,6 +400,7 @@ document.addEventListener("click",async e=>{
   }catch(error){toast(error.message);}finally{busy=false;el.disabled=false;}
 });
 dialog.addEventListener("cancel",e=>{if(busy)e.preventDefault();});
+qrDialog.querySelector("#qrReturn").addEventListener("click",()=>qrDialog.close());
 awardDialog.querySelector("#awardReturn").addEventListener("click",()=>awardDialog.close());
 awardDialog.addEventListener("close",()=>{
   app.querySelector('.desk-action [data-action="draw"], .desk-action [data-action="close"]')?.focus({preventScroll:true});
