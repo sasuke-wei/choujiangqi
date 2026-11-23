@@ -28,13 +28,41 @@ function toast(msg){
   const box=document.querySelector("#notice");box.textContent=msg;box.hidden=false;clearTimeout(timer);
   timer=setTimeout(()=>box.hidden=true,5000);
 }
-async function api(body){
+const receiptStorageKey = "lottery-participant:" + id;
+let participantReceipt = mode === "join" && id ? readParticipantReceipt() : "";
+let participantPending = false, participantClosed = false;
+function readParticipantReceipt() {
+  for (const storage of ["localStorage", "sessionStorage"]) {
+    try {
+      const savedReceipt = window[storage].getItem(receiptStorageKey);
+      if (savedReceipt) return savedReceipt;
+    } catch { /* Some embedded browsers restrict storage. */ }
+  }
+  return "";
+}
+function saveParticipantReceipt(value) {
+  participantReceipt = value;
+  for (const storage of ["localStorage", "sessionStorage"]) {
+    try {
+      if (value) window[storage].setItem(receiptStorageKey, value);
+      else window[storage].removeItem(receiptStorageKey);
+    } catch { /* Keep the receipt in memory for this page. */ }
+  }
+}
+function newParticipantReceipt() {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
+}
+async function api(body, receipt){
   const options={cache:"no-store"};
   const authenticated=canOperate||(!body&&mode==="screen"&&key);
-  const headers=authenticated?{Authorization:"Bearer "+key}:{};
+  const headers=authenticated?{"X-Lottery-Host-Key":key}:{};
+  const query=new URLSearchParams();
+  if(id)query.set("id",id);
+  if(receipt){query.set("view","result");headers["X-Lottery-Receipt"]=receipt;}
   if(body)Object.assign(options,{method:"POST",headers:{...headers,"Content-Type":"application/json"},body:JSON.stringify(body)});
   else options.headers=headers;
-  const res=await fetch("/api/lottery"+(id?"?id="+encodeURIComponent(id):""),options).catch(()=>{throw Error("连接中断，请重试。");});
+  const res=await fetch("/api/lottery?"+query,options).catch(()=>{throw Error("连接中断，请重试。");});
   const data=await res.json();
   if(!res.ok)throw Error(data.error||"暂时无法完成操作。");
   return data;
@@ -46,6 +74,7 @@ function agenda(rounds,current,edit){
   return `<section class="agenda"><div class="section-head"><h2>奖项安排</h2><small>${rounds.length} 轮</small></div>${rounds.map((r,i)=>`<div class="round ${i===current?"on":""}"><span class="roundtag" aria-label="第 ${i+1} 轮">${num(i+1)}</span><div><strong>${esc(r.prize)}</strong><small>${i<current?"已开奖":i===current?"下一轮":"待开奖"}</small></div><div class="right">${r.quota} 人 ${edit&&i>=current?button("edit","调整","navlink",`data-i="${i}" aria-label="调整第 ${i+1} 轮"`):""}</div></div>`).join("")}</section>`;
 }
 function home(){
+  document.body.classList.add("home-page");
   app.innerHTML=`<section class="start"><h1>现场抽奖</h1><div class="start-actions">${button("setup","配置新活动","primary")}${button("demo","体验演示","demo-entry")}</div></section>`;
 }
 function modal(title,content,fn,label="确认"){
@@ -206,6 +235,41 @@ function renderActivity(){
   document.body.classList.toggle("stage",mode!=="join");
   if(mode==="join")join();else stage();
 }
+function showParticipantResult(result) {
+  const panel = document.querySelector("#participantResult");
+  if (!panel) return;
+  const form = document.querySelector("#joinForm");
+  form.hidden = true;
+  document.querySelector(".entry .poster-description").hidden = true;
+  panel.hidden = false;
+  participantClosed = result.closed === true;
+  let content;
+  if (result.status === "won") {
+    content = `<h2>恭喜您中奖！</h2><p>您抽中了<strong class="participant-prize">「${esc(result.prize)}」</strong>。</p><p>第 ${result.round} 轮 · 请按现场安排领奖。</p>`;
+  } else if (result.status === "absent") {
+    content = `<h2>本轮已登记缺席</h2><p>您的第 ${result.round} 轮中奖记录已标记缺席。如有疑问，请联系现场工作人员。</p>`;
+  } else if (result.status === "finished") {
+    content = `<h2>本场抽奖已结束</h2><p>您本场未中奖。感谢参与。</p>`;
+  } else {
+    content = `<h2>报名成功</h2><p>您从第 ${result.eligible} 轮起参与抽奖。</p><p class="helper">保留此页面，开奖后会自动显示您的结果。</p>`;
+  }
+  if (panel.dataset.content !== content) {
+    panel.innerHTML = content;
+    panel.dataset.content = content;
+  }
+}
+async function refreshParticipantResult() {
+  if (!participantReceipt || participantPending || participantClosed || document.hidden ||
+      !document.querySelector("#participantResult")) return;
+  participantPending = true;
+  try {
+    showParticipantResult(await api(undefined, participantReceipt));
+  } catch {
+    // Retain the displayed result during a connection interruption and retry on the next poll.
+  } finally {
+    participantPending = false;
+  }
+}
 const signupFields = `<label>姓名<input name="name" required maxlength="40" autocomplete="name" placeholder="请输入完整姓名"></label><label>学号<input name="student" required minlength="4" maxlength="32" spellcheck="false" placeholder="请输入学号，保留开头的 0"></label><p class="helper">同一学号限报一次。开奖时大屏会滚动显示姓名，中奖后显示姓名和学号后四位。</p>`;
 function join(){
   if(state.kind==="demo"){
@@ -213,7 +277,7 @@ function join(){
     return;
   }
   const stopped=state.current===state.rounds.length;
-  app.innerHTML=`<div class="entry">${hero("活动报名",state.title,stopped?"本场报名已结束":`现在报名可参加第 ${state.current+1} 轮及后续抽奖`)}<form id="joinForm" class="form panel below stack"><h2>${stopped?"报名已截止":"填写报名信息"}</h2>${stopped?"":`${signupFields}<button class="primary" type="submit">确认报名</button>`}<p class="error" role="alert"></p></form></div>`;
+  app.innerHTML=`<div class="entry">${hero("活动报名",state.title,stopped?"本场报名已结束":`现在报名可参加第 ${state.current+1} 轮及后续抽奖`)}<form id="joinForm" class="form panel below stack"><h2>${stopped?"报名已截止":"填写报名信息"}</h2>${stopped?"":`${signupFields}<button class="primary" type="submit">确认报名</button>`}<p class="error" role="alert"></p></form><section id="participantResult" class="entry-result below stack" role="status" hidden></section></div>`;
 }
 async function refresh(force=false){
   const n=++sequence;
@@ -224,6 +288,7 @@ async function refresh(force=false){
     if(attendance)attendance.textContent=String(next.count);
     state=next;
     if(changed)renderActivity();
+    if(mode==="join")void refreshParticipantResult();
   }catch(error){
     if(!state)app.innerHTML=`<div class="compact stack"><h1>活动暂时无法打开</h1><p>${esc(error.message)}</p><div class="actions">${button("retry","重新连接")}<a class="button" href="${listUrl}">返回首页</a></div></div>`;
     else toast(error.message);
@@ -287,15 +352,26 @@ document.addEventListener("submit",async e=>{
   try{
     if(f.id==="modalForm"){await activeForm(f);dialog.close();}
     if(f.id==="joinForm"){
-      const record=await api({action:"register",name:f.elements.name.value,student:f.elements.student.value});
-      f.innerHTML=`<div class="success">${record.duplicate?"该学号已报名":"报名成功"}</div><p>本学号已登记，从第 ${record.eligible} 轮起具备抽奖资格。中奖后请留意主持人叫号。</p>`;
+      if(!participantReceipt)saveParticipantReceipt(newParticipantReceipt());
+      const record=await api({action:"register",name:f.elements.name.value,student:f.elements.student.value,receipt:participantReceipt});
+      if(record.canViewResults){
+        showParticipantResult({eligible:record.eligible,status:"waiting"});
+        void refreshParticipantResult();
+      }else{
+        saveParticipantReceipt("");
+        f.innerHTML=`<h2>该学号已报名</h2><p>请在原报名设备查看结果，或留意现场开奖。</p>`;
+      }
     }
   }catch(error){f.querySelector(".error").textContent=error.message;}finally{submit.disabled=false;busy=false;}
 });
 if(!id)home();
 else{
   await refresh(true);
-  if(mode!=="join")setInterval(()=>{if(!busy&&!dialog.open&&!document.hidden)refresh();},1800);
-  document.addEventListener("visibilitychange",()=>{if(!document.hidden&&!dialog.open&&mode!=="join")refresh();});
+  if(mode==="join")setInterval(refreshParticipantResult,5000+Math.floor(Math.random()*2000));
+  else setInterval(()=>{if(!busy&&!dialog.open&&!document.hidden)refresh();},1800);
+  document.addEventListener("visibilitychange",()=>{
+    if(document.hidden||dialog.open)return;
+    if(mode==="join")void refreshParticipantResult();else void refresh();
+  });
 }
 

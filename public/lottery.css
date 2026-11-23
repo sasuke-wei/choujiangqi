@@ -50,17 +50,41 @@ button:disabled { opacity: .5; cursor: wait; }
 .school { padding-left: 18px; border-left: 1px solid var(--line); color: var(--muted); font-size: .94rem; letter-spacing: .09em; }
 #context { margin-left: auto; color: var(--muted); font-size: .875rem; }
 main { padding-bottom: 64px; }
+.home-page main { width: min(1440px, 100%); padding: clamp(0px, 2.6vw, 40px); }
 .start {
-  min-height: min(580px, 74vh);
+  position: relative;
+  isolation: isolate;
+  min-height: clamp(490px, 82svh, 860px);
   display: grid;
   align-content: center;
-  justify-items: center;
-  gap: 28px;
-  text-align: center;
+  justify-items: start;
+  gap: 24px;
+  padding: clamp(24px, 7vw, 110px);
+  color: white;
+  background: #243e35 url("/campus-home.png") center 55% / cover no-repeat;
 }
+.start::before { content: ""; position: absolute; inset: 0; z-index: -1; background: rgba(13, 25, 19, .46); }
 .start h1 { font-size: clamp(2.5rem, 6vw, 4.5rem); }
-.start-actions { display: grid; justify-items: center; gap: 5px; }
-.start .primary { min-width: 156px; min-height: 48px; font-size: 1rem; }
+.start-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.start .primary { min-width: 156px; min-height: 48px; border-color: white; font-size: 1rem; }
+.start .demo-entry { background: transparent; color: white; }
+.start :focus-visible { outline-color: white; }
+@media (max-width: 620px) {
+  .home-page main { padding: 0; }
+  .start {
+    min-height: 100svh;
+    align-content: end;
+    justify-items: center;
+    padding: 30px 15px max(54px, 12svh);
+    text-align: center;
+    background-position: 50% 50%;
+  }
+  .start-actions { flex-direction: column; gap: 4px; }
+}
+.entry :is(form, .entry-result)[hidden] { display: none; }
+.entry-result { max-width: 44rem; padding-block: 24px; border-top: 1px solid var(--line); }
+.entry-result h2 { color: var(--green); font-size: clamp(1.5rem, 4vw, 2.25rem); }
+.participant-prize { color: var(--green); overflow-wrap: anywhere; }
 .demo-entry { border: 0; padding-block: 4px; color: var(--green); font-size: .875rem; font-weight: 500; text-decoration: underline; text-underline-offset: 4px; }
 .poster {
   display: grid;

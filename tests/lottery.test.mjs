@@ -29,7 +29,12 @@ async function event(quotas) {
   assert.equal(result.status,200);
   return result.data;
 }
-const join = (id,student) => request(id,{action:"register", name:"同名同学", student});
+const join = (id,student,receipt) => request(id,{action:"register", name:"同名同学", student, receipt});
+const proof = value => value.toString(16).padStart(64,"0");
+async function participant(id,receipt) {
+  const response = await fetch(base+"?id="+id+"&view=result", { headers: receipt ? {"X-Lottery-Receipt":receipt} : {} });
+  return {status:response.status, data:await response.json()};
+}
 async function revealed(id) {
   let {data} = await request(id);
   while (data.reveal) {
@@ -40,8 +45,14 @@ async function revealed(id) {
 }
 test("200 人并发报名、重复学号、四轮开奖和补抽",async()=>{
   const {id,key} = await event([3,2,2,1]);
-  const people = await Promise.all(Array.from({length:200},(_,i)=>join(id,"A"+(10000+i))));
-  assert.ok(people.every(p=>p.status===200 && !p.data.duplicate));
+  const people = await Promise.all(Array.from({length:200},(_,i)=>join(id,"A"+(10000+i),proof(i))));
+  assert.ok(people.every(p=>p.status===200 && !p.data.duplicate && p.data.canViewResults));
+  assert.equal((await join(id,"A10000",proof(0))).data.canViewResults,true);
+  assert.equal((await join(id,"A10000",proof(300))).data.canViewResults,false);
+  assert.equal((await participant(id,proof(300))).status,404);
+  assert.equal((await participant(id)).status,400);
+  assert.equal((await participant((await event([1])).id,proof(0))).status,404);
+  assert.equal((await participant(id,proof(0))).data.status,"waiting");
   assert.ok((await join(id,"ａ１００００")).data.duplicate);
   assert.equal((await request(id)).data.count,200);
   assert.equal((await request(id,{action:"draw",revision:0})).status,403);
@@ -52,6 +63,8 @@ test("200 人并发报名、重复学号、四轮开奖和补抽",async()=>{
   assert.equal(pending.reveal.durationMs,7000);
   assert.deepEqual(pending.rounds[0].wins,[]);
   assert.equal(pending.reveal.names,undefined);
+  const beforeReveal=await Promise.all(Array.from({length:200},(_,i)=>participant(id,proof(i))));
+  assert.ok(beforeReveal.every(p=>p.data.status==="waiting" && p.data.prize===undefined));
   assert.equal((await request(id,null,"invalid")).data.reveal.names,undefined);
   assert.equal((await request(id,{action:"draw",revision:pending.revision},key)).status,409);
   assert.equal((await join(id,"B99999")).data.eligible,2);
@@ -62,12 +75,18 @@ test("200 人并发报名、重复学号、四轮开奖和补抽",async()=>{
   const first=state.rounds[0].wins;
   assert.equal(first.length,3);
   assert.deepEqual(Object.keys(first[0]).sort(),["absent","id","name","suffix"]);
+  const missedReceipt=proof(Number(first[0].suffix));
+  const winningReceipt=proof(Number(first[1].suffix));
+  assert.deepEqual((await participant(id,missedReceipt)).data, {eligible:1,status:"won",closed:false,prize:"奖品0",round:1});
   assert.equal((await request(id,{action:"replace",person:first[0].id,revision:state.revision},key)).status,200);
   assert.equal((await request(id)).data.reveal.kind,"replace");
+  assert.equal((await participant(id,winningReceipt)).data.status,"won");
+  assert.equal((await participant(id,missedReceipt)).data.status,"absent");
   assert.equal((await request(id,null,key)).data.reveal.names.length,197);
   state=await revealed(id);
   assert.deepEqual(state.rounds[0].wins.slice(0,3),[{...first[0],absent:true},...first.slice(1)]);
   assert.equal(state.rounds[0].wins.length,4);
+  assert.equal((await participant(id,proof(Number(state.rounds[0].wins[3].suffix)))).data.status,"won");
   for(let i=1;i<4;i++){
     assert.equal((await request(id,{action:"draw",revision:state.revision},key)).status,200);
     state=await revealed(id);

@@ -4,6 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import { mkdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { lottery } from "../lib/lottery.mjs";
+import { migrateLotteryDatabase } from "./lottery-migrations.mjs";
 
 const root = new URL("../", import.meta.url);
 const port = Number(process.env.LOTTERY_PORT || 8765);
@@ -11,11 +12,7 @@ const folder = new URL(".sites-runtime/", root);
 mkdirSync(folder, { recursive: true });
 const connection = new DatabaseSync(process.env.LOTTERY_TEST_MEMORY === "1" ? ":memory:" : fileURLToPath(new URL("rehearsal.sqlite", folder)));
 connection.exec("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;");
-if (connection.prepare("PRAGMA user_version").get().user_version === 0) {
-  connection.exec("BEGIN");
-  connection.exec(readFileSync(new URL("drizzle/0000_lottery.sql", root), "utf8"));
-  connection.exec("PRAGMA user_version=1; COMMIT");
-}
+migrateLotteryDatabase(connection);
 class Statement {
   constructor(sql, args = []) { this.sql = sql; this.args = args; }
   bind(...args) { return new Statement(this.sql, args); }
@@ -36,7 +33,7 @@ const db = {
     } catch (error) { connection.exec("ROLLBACK"); throw error; }
   }
 };
-const assets = new Map(Object.entries({ "lottery.html": "text/html", "lottery.js": "text/javascript", "lottery.css": "text/css", "qr.js": "text/javascript", "mark.svg": "image/svg+xml", "qr-LICENSE.txt": "text/plain" }));
+const assets = new Map(Object.entries({ "lottery.html": "text/html", "lottery.js": "text/javascript", "lottery.css": "text/css", "qr.js": "text/javascript", "mark.svg": "image/svg+xml", "campus-home.png": "image/png", "qr-LICENSE.txt": "text/plain" }));
 const server = createServer(async (req, res) => {
   try {
     const address = "http://127.0.0.1:" + port;
@@ -59,7 +56,7 @@ const server = createServer(async (req, res) => {
     }
     const path = url.pathname === "/" ? "lottery.html" : url.pathname.slice(1);
     if (!assets.has(path)) { res.writeHead(404).end(); return; }
-    res.writeHead(200, { "Content-Type": assets.get(path) + "; charset=utf-8", "Cache-Control": "no-cache" });
+    res.writeHead(200, { "Content-Type": assets.get(path) + (assets.get(path).startsWith("image/") ? "" : "; charset=utf-8"), "Cache-Control": "no-cache" });
     res.end(readFileSync(new URL("public/" + path, root)));
   } catch (error) {
     console.error("Request failed", error.message);

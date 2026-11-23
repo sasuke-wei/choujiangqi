@@ -9,4 +9,8 @@ export const people = sqliteTable("people", {
   event: text("event").notNull().references(() => events.id),
   student: text("student").notNull(), name: text("name").notNull(),
   suffix: text("suffix").notNull(), eligible: integer("eligible").notNull(),
-}, t => [uniqueIndex("person_per_event").on(t.event, t.student)]);
+  receipt: text("receipt"),
+}, t => [
+  uniqueIndex("person_per_event").on(t.event, t.student),
+  uniqueIndex("receipt_per_event").on(t.event, t.receipt),
+]);
