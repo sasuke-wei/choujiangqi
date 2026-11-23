@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#ffffff">
   <title>抽奖台</title>
   <link rel="icon" href="/mark.svg?v=2" type="image/svg+xml">
-  <link rel="stylesheet" href="/lottery.css?v=6">
+  <link rel="stylesheet" href="/lottery.css?v=7">
 </head>
 <body>
   <svg xmlns="http://www.w3.org/2000/svg" class="symbols" aria-hidden="true" focusable="false">
@@ -79,7 +79,25 @@
   </div></header>
   <main id="app"><p>正在打开抽奖台…</p></main>
   <dialog id="dialog" aria-labelledby="dialogTitle"><div id="dialogBody"></div></dialog>
+  <dialog id="awardDialog" class="award-screen" aria-labelledby="awardTitle" aria-describedby="awardRound">
+    <div class="award-stage">
+      <header class="award-brand">
+        <span class="award-crest" role="img" aria-label="中南民族大学校徽"></span>
+        <p class="award-motto"><span>笃信好学</span><span>自然宽和</span></p>
+      </header>
+      <div class="award-heading">
+        <p id="awardRound"></p>
+        <h2 id="awardTitle">恭喜下列同学中奖</h2>
+      </div>
+      <div class="award-scroll" tabindex="0" aria-label="本轮完整中奖名单">
+        <ul id="awardWinners" class="award-winners"></ul>
+      </div>
+      <footer class="award-footer">
+        <button type="button" id="awardReturn" autofocus>返回抽奖台</button>
+      </footer>
+    </div>
+  </dialog>
   <div id="notice" role="status" aria-live="polite" hidden></div>
-  <script type="module" src="/lottery.js?v=9"></script>
+  <script type="module" src="/lottery.js?v=10"></script>
 </body>
 </html>

@@ -33,7 +33,7 @@ const db = {
     } catch (error) { connection.exec("ROLLBACK"); throw error; }
   }
 };
-const assets = new Map(Object.entries({ "lottery.html": "text/html", "lottery.js": "text/javascript", "lottery.css": "text/css", "qr.js": "text/javascript", "mark.svg": "image/svg+xml", "campus-home.png": "image/png", "qr-LICENSE.txt": "text/plain" }));
+const assets = new Map(Object.entries({ "lottery.html": "text/html", "lottery.js": "text/javascript", "lottery.css": "text/css", "qr.js": "text/javascript", "mark.svg": "image/svg+xml", "campus-home.png": "image/png", "awards-campus.jpg": "image/jpeg", "qr-LICENSE.txt": "text/plain" }));
 const server = createServer(async (req, res) => {
   try {
     const address = "http://127.0.0.1:" + port;

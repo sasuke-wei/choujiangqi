@@ -2,6 +2,7 @@ import { qrPath } from "./qr.js";
 
 const params=new URLSearchParams(location.search), id=params.get("event"), mode=params.get("view")||"host";
 const app=document.querySelector("#app"), dialog=document.querySelector("#dialog");
+const awardDialog=document.querySelector("#awardDialog");
 function saved(){try{return JSON.parse(localStorage.getItem("press-events")||"{}");}catch{return {};}}
 const demoStorage="press-demo";
 function demoKey(){
@@ -230,6 +231,23 @@ function stage(){
     <div class="stagegrid${isDemo?" demo-stage":""}"><div class="broadcast">${board}</div>${isDemo?"":qrBox()}</div>${tools}`;
   if(state.reveal)runRevealClock(state.reveal);
 }
+function showAwardScreen(previous, next) {
+  if (!canOperate || !previous || next.reveal || !next.current || awardDialog.open) return;
+  const round = next.rounds[next.current - 1];
+  const oldRound = previous.rounds[next.current - 1];
+  const newResult = previous.reveal || previous.current < next.current ||
+    round.wins.length > (oldRound?.wins.length ?? 0);
+  if (!newResult) return;
+  const winners = round.wins.filter(winner => !winner.absent);
+  if (!winners.length) return;
+  awardDialog.querySelector("#awardRound").textContent = `第 ${next.current} 轮 · ${round.prize}`;
+  const list = awardDialog.querySelector("#awardWinners");
+  list.innerHTML = winners.map(winner =>
+    `<li><strong>${esc(winner.name)}</strong><small>学号尾号 ${esc(winner.suffix)}</small></li>`
+  ).join("");
+  awardDialog.showModal();
+  awardDialog.querySelector(".award-scroll").scrollTop = 0;
+}
 function renderActivity(){
   clearTimeout(revealTimer);
   document.body.classList.toggle("stage",mode!=="join");
@@ -283,11 +301,13 @@ async function refresh(force=false){
   const n=++sequence;
   try{
     const next=await api();if(n!==sequence)return;
-    const changed=force||!state||next.revision!==state.revision||Boolean(next.reveal)!==Boolean(state.reveal);
+    const previous=state;
+    const changed=force||!previous||next.revision!==previous.revision||Boolean(next.reveal)!==Boolean(previous.reveal);
     const attendance=document.querySelector("#attendance");
     if(attendance)attendance.textContent=String(next.count);
     state=next;
     if(changed)renderActivity();
+    showAwardScreen(previous,next);
     if(mode==="join")void refreshParticipantResult();
   }catch(error){
     if(!state)app.innerHTML=`<div class="compact stack"><h1>活动暂时无法打开</h1><p>${esc(error.message)}</p><div class="actions">${button("retry","重新连接")}<a class="button" href="${listUrl}">返回首页</a></div></div>`;
@@ -342,6 +362,10 @@ document.addEventListener("click",async e=>{
   }catch(error){toast(error.message);}finally{busy=false;el.disabled=false;}
 });
 dialog.addEventListener("cancel",e=>{if(busy)e.preventDefault();});
+awardDialog.querySelector("#awardReturn").addEventListener("click",()=>awardDialog.close());
+awardDialog.addEventListener("close",()=>{
+  app.querySelector('.desk-action [data-action="draw"], .desk-action [data-action="close"]')?.focus({preventScroll:true});
+});
 document.addEventListener("fullscreenchange",()=>{
   const toggle=app.querySelector('[data-action="fullscreen"]');
   if(toggle)toggle.textContent=document.fullscreenElement?"退出全屏":"全屏显示";
@@ -368,9 +392,9 @@ if(!id)home();
 else{
   await refresh(true);
   if(mode==="join")setInterval(refreshParticipantResult,5000+Math.floor(Math.random()*2000));
-  else setInterval(()=>{if(!busy&&!dialog.open&&!document.hidden)refresh();},1800);
+  else setInterval(()=>{if(!busy&&!dialog.open&&!awardDialog.open&&!document.hidden)refresh();},1800);
   document.addEventListener("visibilitychange",()=>{
-    if(document.hidden||dialog.open)return;
+    if(document.hidden||dialog.open||awardDialog.open)return;
     if(mode==="join")void refreshParticipantResult();else void refresh();
   });
 }
